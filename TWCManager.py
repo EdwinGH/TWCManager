@@ -610,7 +610,7 @@ def car_api_available(email = None, password = None, charge = None):
         if(carapi.getVehicleCount() > 0):
             # Wake cars if needed
             needSleep = False
-            for for vehicle in carapi.getCarApiVehicles():
+            for vehicle in carapi.getCarApiVehicles():
                 if(charge == True and vehicle.stopAskingToStartCharging):
                     if(config['config']['debugLevel'] >= 8):
                         print(time_now() + ": Don't charge vehicle " + str(vehicle.ID)
