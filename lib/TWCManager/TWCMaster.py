@@ -79,6 +79,7 @@ class TWCMaster:
         self.debugOutputToFile = config["config"].get("debugOutputToFile", False)
         self.TWCID = TWCID
         self.subtractChargerLoad = config["config"]["subtractChargerLoad"]
+
         self.advanceHistorySnap()
 
         # Register ourself as a module, allows lookups via the Module architecture
@@ -92,8 +93,11 @@ class TWCMaster:
         return self.slaveTWCRoundRobin.append(slaveTWC)
 
     def advanceHistorySnap(self):
+        self.debugLog(50, "TWCMaster", "START advanceHistorySnap")
         try:
-            futureSnap = datetime.now().astimezone() + timedelta(minutes=5)
+# EZ modified
+#            futureSnap = datetime.now().astimezone() + timedelta(minutes=5)
+            futureSnap = datetime.now() + timedelta(minutes=5)
             self.nextHistorySnap = futureSnap.replace(
                 minute=math.floor(futureSnap.minute / 5) * 5, second=0, microsecond=0
             )
@@ -112,6 +116,7 @@ class TWCMaster:
         return match
 
     def checkScheduledCharging(self):
+        self.debugLog(50, "TWCMaster", "START checkScheduledCharging")
 
         # Check if we're within the hours we must use scheduledAmpsMax instead
         # of nonScheduledAmpsMax
@@ -129,6 +134,11 @@ class TWCMaster:
             and endHour > -1
             and daysBitmap > 0
         ):
+            self.debugLog(50, "TWCMaster", "checkScheduledCharging: Enabled")
+            self.debugLog(50, "TWCMaster", "checkScheduledCharging: hourNow=" + str(hourNow) + " startHour=" + str(startHour) + " endHour=" + str(endHour))
+            self.debugLog(50, "TWCMaster", "checkScheduledCharging: weekdayNow=" + str(ltNow.tm_wday) + " daysBitmap=" + str(daysBitmap))
+            self.debugLog(50, "TWCMaster", "checkScheduledCharging: 1 << weekdayNow=" + str(1 << ltNow.tm_wday))
+            self.debugLog(50, "TWCMaster", "checkScheduledCharging: daysBitmap & (1 << weekdayNow)=" + str(daysBitmap & (1 << ltNow.tm_wday)))
             if startHour > endHour:
                 # We have a time like 8am to 7am which we must interpret as the
                 # 23-hour period after 8am or before 7am. Since this case always
@@ -143,7 +153,10 @@ class TWCMaster:
                 if (hourNow >= startHour and (daysBitmap & (1 << ltNow.tm_wday))) or (
                     hourNow < endHour and (daysBitmap & (1 << yesterday))
                 ):
+                    self.debugLog(50, "TWCMaster", "checkScheduledCharging: in Overnight schedule")
                     blnUseScheduledAmps = 1
+                else:
+                    self.debugLog(50, "TWCMaster", "checkScheduledCharging: Overnight schedule, but not between")
             else:
                 # We have a time like 7am to 8am which we must interpret as the
                 # 1-hour period between 7am and 8am.
@@ -153,7 +166,14 @@ class TWCMaster:
                     and hourNow < endHour
                     and (daysBitmap & (1 << ltNow.tm_wday))
                 ):
+                    self.debugLog(11, "TWCMaster", "checkScheduledCharging: in single day schedule")
                     blnUseScheduledAmps = 1
+                else:
+                    self.debugLog(11, "TWCMaster", "checkScheduledCharging: not between hours")
+                
+        else: # not met
+            self.debugLog(11, "TWCMaster", "checkScheduledCharging: not met (startHour or endHour -1 or ScheduledAmpsMax<=0")
+            
         return blnUseScheduledAmps
 
     def convertAmpsToWatts(self, amps):
@@ -287,20 +307,25 @@ class TWCMaster:
             return 0
 
     def getScheduledAmpsMax(self):
+        self.debugLog(50, "TWCMaster", "START getScheduledAmpsMax")
         schedamps = int(self.settings.get("scheduledAmpsMax", 0))
         if schedamps > 0:
+            self.debugLog(11, "TWCMaster", "getScheduledAmpsMax amps=" + str(schedamps))
             return schedamps
         else:
+            self.debugLog(11, "TWCMaster", "getScheduledAmpsMax returning 0")
             return 0
 
     def getScheduledAmpsStartHour(self):
+        self.debugLog(50, "TWCMaster", "START getScheduledAmpsStartHour")
         return int(self.settings.get("scheduledAmpsStartHour", -1))
 
     def getScheduledAmpsTimeFlex(self):
+        self.debugLog(50, "TWCMaster", "START getScheduledAmpsTimeFlex")
         startHour = self.getScheduledAmpsStartHour()
         days = self.getScheduledAmpsDaysBitmap()
         if (
-            startHour >= 0
+            startHour > -1
             and self.getScheduledAmpsFlexStart()
             and self.countSlaveTWC() == 1
         ):
@@ -318,6 +343,7 @@ class TWCMaster:
                     - (hoursForFullCharge * realChargeFactor),
                     2,
                 )
+                self.debugLog(11, "TWCMaster", "getScheduledAmpsTimeFlex calculated startHour=" + str(startHour))
                 # Always starting a quarter of a hour earlier
                 startHour -= 0.25
                 # adding half an hour if battery should be charged over 98%
@@ -325,16 +351,22 @@ class TWCMaster:
                     startHour -= 0.5
                 if startHour < 0:
                     startHour = startHour + 24
-                # if startHour is smaller than the intial startHour, then it should begin beginn charging a day later
+                # if startHour is smaller than the intial startHour, then it should begin charging a day later
                 # (if starting usually at 9pm and it calculates to start at 4am - it's already the next day)
                 if startHour < self.getScheduledAmpsDaysBitmap():
                     days = self.rotl(days, 7)
+                self.debugLog(11, "TWCMaster", "getScheduledAmpsTimeFlex final startHour=" + str(startHour))
+            else: # No vehicle
+                self.debugLog(11, "TWCMaster", "getScheduledAmpsTimeFlex No vehicle...")
+        else: # Not met
+            self.debugLog(11, "TWCMaster", "getScheduledAmpsTimeFlex Not met (>1 Slave, FlexAmps False, or startHour -1")        
         return (startHour, self.getScheduledAmpsEndHour(), days)
 
     def getScheduledAmpsEndHour(self):
         return self.settings.get("scheduledAmpsEndHour", -1)
 
     def getScheduledAmpsFlexStart(self):
+        self.debugLog(50, "TWCMaster", "START getScheduledAmpsFlexStart=" + str(self.settings.get("scheduledAmpsFlexStart", False))) 
         return int(self.settings.get("scheduledAmpsFlexStart", False))
 
     def getSlaveLifetimekWh(self):
@@ -357,6 +389,7 @@ class TWCMaster:
         return self.slaveSign
 
     def getStatus(self):
+        self.debugLog(50, "TWCMaster", "START getStatus")
 
         data = {
             "carsCharging": self.num_cars_charging_now(),
@@ -622,6 +655,7 @@ class TWCMaster:
         return " ".join("{:02X}".format(c) for c in ba)
 
     def loadSettings(self):
+        self.debugLog(50, "TWCMaster", "START loadSettings")
         # Loads the volatile application settings (such as charger timings,
         # API credentials, etc) from a JSON file
 
@@ -960,6 +994,7 @@ class TWCMaster:
         self.queue_background_task({"cmd": "saveSettings"})
 
     def saveSettings(self):
+        self.debugLog(50, "TWCMaster", "START saveSettings")
         # Saves the volatile application settings (such as charger timings,
         # API credentials, etc) to a JSON file
         fileName = self.config["config"]["settingsPath"] + "/settings.json"
@@ -1212,16 +1247,20 @@ class TWCMaster:
         self.spikeAmpsToCancel6ALimit = amps
 
     def snapHistoryData(self):
+        self.debugLog(50, "TWCMaster", "START snapHistoryData")
         snaptime = self.nextHistorySnap
+        self.debugLog(20, "TWCMaster", "snapHistoryData snaptime:" + str(self.nextHistorySnap))
         avgCurrent = 0
 
         now = None
         try:
-            now = datetime.now().astimezone()
-            if now < snaptime:
-                return
+#            now = datetime.now().astimezone()
+            now = datetime.now()
+            self.debugLog(20, "TWCMaster", "snapHistoryData now:" + str(now))
         except ValueError as e:
-            self.debugLog(10, "TWCSlave  ", str(e))
+            self.debugLog(20, "TWCMaster", "snapHistoryData ValueError:" + str(e))
+            return
+        if now < snaptime:
             return
 
         for slave in self.getSlaveTWCs():
