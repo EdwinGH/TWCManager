@@ -33,6 +33,9 @@ sudo apt-get install -y git python3 python3-setuptools
 
 TWCManager requires a minimum of python 3.3 to work correctly.
 
+Note that if you use sysv_ipc, the latest version requires Pythin 3.6+ due to use of f-string formatting. YOu can doenload an older version, or do not use sysv_ipc (only used for depricated lighttpd web interface)
+
+
 ### Raspbian Buster
 
 You may need to set python3 as your default python interpreter version on Debian Buster. The following command will set python 3.7 as your default interpreter.
@@ -77,12 +80,18 @@ git checkout v1.2.1
 make install
 ```
 
+If you want to run the built-in webserver on port 80, you need to give your python interpreter the rights:
+sudo setcap 'cap_net_bind_service=+ep' /usr/bin/python
+
+
 ### Configure TWCManager
 After performing the installation tasks above, edit the /etc/twcmanager/config.json file and customize to suit your environment.
 
 The following documents provide detail on specific areas of configuration:
 
    * [Policy Customization](PolicyCustomization.md)
+
+Note that lighttpd and sysc_ipc are not needed anymore if you use the built-in webserver (port 8080 by default)
 
 ### Running the script
 Once the above steps are complete, start the TWCManager script with the following command:
