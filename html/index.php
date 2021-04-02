@@ -6,7 +6,14 @@
     // 0 is no output other than errors.
     // 1 is just the most useful info.
     // 10 is all info.
-    $debugLevel = 0;
+    $debugLevel = 1;
+
+    // Point $twcScriptDir to the directory containing the TWCManager.py script.
+    // Interprocess Communication with TWCManager.py will not work if this
+    // parameter is incorrect.
+    // EZ: This is wrong. The correct desciption is:
+    // Point $twcScriptDir to the settingsPath from the config file.
+    //  Typically this is /etc/twcmanager. See also WebIPCControl.py in lib/TWCManager/Control
     $twcScriptDir = "/etc/twcmanager";
 
     // End configuration parameters
@@ -33,6 +40,7 @@
     // TWCManager.py script and getting data back.  See notes in TWCManager.py for
     // how IPC works.
     $ipcKey = ftok($twcScriptDir, "T");
+//    print "IPCkey = $ipcKey";
     $ipcQueue = msg_get_queue($ipcKey, 0666);
 
     if(@$_REQUEST['debugTWC'] != '') {
@@ -282,7 +290,7 @@
     }
 ?>
 <form action="index.php" name="refresh" method="get">
-    <table border="0" padding="0" margin="0"><tr>
+    <table border="1" padding="0" margin="0"><tr>
         <td valign="top">
             <?php
                 // TWC models in different world regions have different max amp values.
@@ -295,7 +303,7 @@
                 // Get status info from TWCManager.py which includes state of each slave
                 // TWC and how many amps total are being split amongst them.
                 $response = ipcQuery('getStatus');
-                if($debugLevel >= 1) {
+                if($debugLevel >= 11) {
                     print("Got response: '$response'<p>");
                 }
 
@@ -326,54 +334,52 @@
                     else {
                         print "None";
                     }
+                    print "</p><p style=\"margin-bottom:0\">";
 
                     $carApiEmailPasswordNeeded = $status[$statusIdx++];
 
                     if($status[$statusIdx] < 1) {
                         print "<strong>No slave TWCs found on RS485 network.</strong>";
                     }
-                    else {
-                        // Display info about each TWC being managed.
-                        $numTWCs = $status[$statusIdx++];
-                        for($i = 0; $i < $numTWCs; $i++) {
-                            print "</p><p style=\"margin-bottom:0\">";
-                            $subStatus = explode('~', $status[$statusIdx++]);
-                            $twcModelMaxAmps = $subStatus[1];
-                            print("<strong>TWC " . $subStatus[0] . ':</strong> ');
-                            if($subStatus[2] < 1.0) {
-                                /*if($subStatus[4] == 0) {
-                                    // I was hoping state 0 meant no car is plugged in, but
-                                    // there are periods when we're telling the car no power is
-                                    // available and the state flips between 5 and 0 every
-                                    // second. Sometimes it changes to state 0 for long periods
-                                    // (likely when the car goes to sleep for ~15 mins at a
-                                    // time) even when the car is plugged in, so it looks like
-                                    // we can't actually determine if a car is plugged in or
-                                    // not.
-                                    print "No car plugged in.";
-                                }
-                                else {*/
-                                if($subStatus[3] < 5.0) {
-                                    if($maxAmpsToDivideAmongSlaves > 0 &&
-                                       $maxAmpsToDivideAmongSlaves < $minAmpsPerTWC) {
-                                        print "Power available less than {$minAmpsPerTWC}A (minAmpsPerTWC).";
-                                    }
-                                    else {
-                                        print "No power available.";
-                                    }
+
+                    // Display info about each TWC being managed.
+                    for($i = 1; $i <= $status[$statusIdx]; $i++) {
+                        $subStatus = explode('~', $status[$statusIdx + $i]);
+                        $twcModelMaxAmps = $subStatus[1];
+                        print("<strong>TWC " . $subStatus[0] . ':</strong> ');
+                        if($subStatus[2] < 1.0) {
+                            /*if($subStatus[4] == 0) {
+                                // I was hoping state 0 meant no car is plugged in, but
+                                // there are periods when we're telling the car no power is
+                                // available and the state flips between 5 and 0 every
+                                // second. Sometimes it changes to state 0 for long periods
+                                // (likely when the car goes to sleep for ~15 mins at a
+                                // time) even when the car is plugged in, so it looks like
+                                // we can't actually determine if a car is plugged in or
+                                // not.
+                                print "No car plugged in.";
+                            }
+                            else {*/
+                            if($subStatus[3] < 5.0) {
+                                if($maxAmpsToDivideAmongSlaves > 0 &&
+                                   $maxAmpsToDivideAmongSlaves < $minAmpsPerTWC) {
+                                    print "Power available less than {$minAmpsPerTWC}A (minAmpsPerTWC).";
                                 }
                                 else {
-                                    print "Finished charging, unplugged, or waking up."
-                                        . " (" . $subStatus[3] . "A available)";
+                                    print "No power available.";
                                 }
                             }
                             else {
-                                print "Charging at " . $subStatus[2] . "A.";
-                                if($subStatus[3] - $subStatus[2] > 1.0) {
-                                    // Car is using over 1A less than is available, so print
-                                    // a note.
-                                    print " (" . $subStatus[3] . "A available)";
-                                }
+                                print "Finished charging, unplugged, or waking up."
+                                    . " (" . $subStatus[3] . "A available)";
+                            }
+                        }
+                        else {
+                            print "Charging at " . $subStatus[2] . "A.";
+                            if($subStatus[3] - $subStatus[2] > 1.0) {
+                                // Car is using over 1A less than is available, so print
+                                // a note.
+                                print " (" . $subStatus[3] . "A available)";
                             }
                         }
                     }
@@ -381,11 +387,27 @@
                 }
 
                 if($twcModelMaxAmps < 40) {
+                    // The last TWC in the list reported supporting under 40
+                    // total amps. Assume this is a 32A EU TWC and offer
+                    // appropriate values. You can add or remove values, just
+                    // make sure they are whole numbers between 5 and
+                    // $twcModelMaxAmps.
+                    // Nietschy pointed out that his car was limited to 16A by
+                    // onboard chargers, but setting the TWC to 16A leads to
+                    // 15.7A actual usage.  When set to 17A, the car is able to
+                    // draw a little more power, so we offer 17A instead of 16A
+                    // below.
                     $use24HourTime = true;
-                    $aryStandardAmps = array();
-                    for ($i = 6; $i <= 32; $i++) {
-                        $aryStandardAmps[strval($i).'A'] = strval($i);
-                    }
+                    $aryStandardAmps = array(
+                                            '6A' => '6',
+                                            '8A' => '8',
+                                            '10A' => '10',
+                                            '13A' => '13',
+                                            '17A' => '17',
+                                            '21A' => '21',
+                                            '25A' => '25',
+                                            '32A' => '32',
+                                        );
                 }
                 else {
                     // Offer values appropriate for an 80A North American TWC
@@ -438,13 +460,14 @@
             ?>
         </td>
         <td valign="middle">
-            <input type="image" alt="Refresh" src="refresh.png" style="margin-left:1em">
+            <input type="button" value="Refresh">
         </td>
     </tr></table>
     </form>
 </div>
+
 <br />
-<div style="display: inline-block; text-align:right;">
+
     <form action="index.php" name="setAmps" method="get">
         <p style="margin-bottom:0;">
             <strong>Scheduled power:</strong>
@@ -468,13 +491,13 @@
             </p>
             <p style="margin-top:0.3em; margin-bottom:0; padding-top:0;">
                 <strong>on days</strong>
-                <?php DisplayCheckbox("scheduledAmpsDay[6]", '', '1') ?>Su
-                <?php DisplayCheckbox("scheduledAmpsDay[0]", '', '1') ?>Mo
-                <?php DisplayCheckbox("scheduledAmpsDay[1]", '', '1') ?>Tu
-                <?php DisplayCheckbox("scheduledAmpsDay[2]", '', '1') ?>We
-                <?php DisplayCheckbox("scheduledAmpsDay[3]", '', '1') ?>Th
-                <?php DisplayCheckbox("scheduledAmpsDay[4]", '', '1') ?>Fr
-                <?php DisplayCheckbox("scheduledAmpsDay[5]", '', '1') ?>Sa
+                <?php DisplayCheckbox("scheduledAmpsDay[0]", '', '1') ?>Mon
+                <?php DisplayCheckbox("scheduledAmpsDay[1]", '', '1') ?>Tue
+                <?php DisplayCheckbox("scheduledAmpsDay[2]", '', '1') ?>Wed
+                <?php DisplayCheckbox("scheduledAmpsDay[3]", '', '1') ?>Thu
+                <?php DisplayCheckbox("scheduledAmpsDay[4]", '', '1') ?>Fri
+                <?php DisplayCheckbox("scheduledAmpsDay[5]", '', '1') ?>Sat
+                <?php DisplayCheckbox("scheduledAmpsDay[6]", '', '1') ?>Sun
             </p>
         </div>
 
@@ -483,15 +506,16 @@
             <?php
                 DisplaySelect('nonScheduledAmpsMax',
                               " onchange=\"if(this.value=='-1'){document.getElementById('resumeGreen').style.display='none'}"
-                            . "else {document.getElementById('resumeGreen').style.display='block'};\"",
-                              array_merge(array('Do not charge' => '0'),
+                            . " else {document.getElementById('resumeGreen').style.display='block'};\"",
+                              array_merge(array('Track green energy' => '-1',
+                                                'Do not charge' => '0'),
                                           $aryStandardAmps));
             ?>
         </p>
         <p id="resumeGreen" style="margin-top:0.3em">
             <strong>Resume 'Track green energy' at:</strong>
             <?php
-            DisplaySelect('resumeTrackGreenEnergyTime', '', array_merge(array('Never' => '23:59'),
+            DisplaySelect('resumeTrackGreenEnergyTime', '', array_merge(array('Never' => '-1:00'),
                                                                              $aryHours));
             ?>
         </p>
@@ -509,6 +533,9 @@
             <input type="submit" name="submit" value="Save">
         </p>
     </form>
+
+<br />
+
     <?php
         if($carApiEmailPasswordNeeded) {
             ?>
@@ -535,7 +562,14 @@
             <?php
         }
     ?>
-</div>
+
+<br />
+
+    <?php
+        print '<p>ChargeLimit =';
+        print $GLOBALS['chargeLimit'];
+        print '.</p>';
+    ?>
 
 <script type="text/javascript">
     <!--
@@ -677,9 +711,9 @@
 
             if($debugLevel >= 11) {
                 // Print binary bytes in the message if debugging requires.
-                print "ipcSend binary message of length " . strlen($ipcMsgSend) . ': ';
-                for($i = 0; $i < strlen($ipcMsgSend); $i++) {
-                    printf("%02x ", ord(substr($ipcMsgSend, $i, 1)));
+                print "ipcSend binary message of length " . strlen($ipcMsg) . ': ';
+                for($i = 0; $i < strlen($ipcMsg); $i++) {
+                    printf("%02x ", ord(substr($ipcMsg, $i, 1)));
                 }
                 print("<p>");
             }
@@ -688,7 +722,7 @@
         if(msg_send($ipcQueue, $ipcMsgType, pack("LSa*", $ipcMsgTime, $ipcMsgID, $ipcMsg),
                     false, false, $ipcErrorCode) == false
         ) {
-            print("Couldn't send '$ipcMsgSend'.  Error code $ipcErrorcode.<br><br>");
+            print("Couldn't send '$ipcMsg'.  Error code $ipcErrorcode.<br><br>");
             return false;
         }
         return true;
