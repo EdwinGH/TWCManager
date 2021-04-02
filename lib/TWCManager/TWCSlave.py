@@ -548,6 +548,7 @@ class TWCSlave:
         )
 
     def receive_slave_heartbeat(self, heartbeatData):
+        self.master.debugLog(50, "TWCSlave", "START receive_slave_heartbeat")
         # Handle heartbeat message received from real slave TWC.
 
         self.master.queue_background_task({"cmd": "getLifetimekWh"})
