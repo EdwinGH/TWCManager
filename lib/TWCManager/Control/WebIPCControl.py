@@ -62,6 +62,11 @@ class WebIPCControl:
         self.webIPCkey = sysv_ipc.ftok(
             self.config["config"]["settingsPath"], ord("T"), True
         )
+        self.master.debugLog(
+            11,
+            "WebIPCCtrl",
+            "INFO: IPCkey = ", self.webIPCkey,
+        )
 
         # Use the key to create a message queue with read/write access for all users.
         self.webIPCqueue = sysv_ipc.MessageQueue(
