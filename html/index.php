@@ -281,18 +281,6 @@
         }
     }
 ?>
-<h1>Note</h1>
-
-Thanks for using TWCManager, we hope you are finding this project useful.
-
-<p>This web interface is scheduled for eventual deprecation. We retain it for the components that have not yet been migrated to the new web interface, and for backwards compatibility with other TWCManager forks.
-
-<p>The defaults for the Web IPC Control Module have changed, disabling the module by default in v1.2.1. If you need to use the legacy web interface, please read the documentation <a href="https://github.com/ngardiner/TWCManager/blob/v1.2.1/docs/modules/Control_WebIPC.md">here</a> for details on what you need to configure.
-
-<p>We strongly recommend using the <a href="https://github.com/ngardiner/TWCManager/blob/v1.2.1/docs/modules/Control_HTTP.md">New Web Interface</a>. Feature partiy in the new web interface is a high priority goal of v1.2.1.
-
-<hr />
-
 <form action="index.php" name="refresh" method="get">
     <table border="0" padding="0" margin="0"><tr>
         <td valign="top">
@@ -342,7 +330,6 @@ Thanks for using TWCManager, we hope you are finding this project useful.
                     $carApiEmailPasswordNeeded = $status[$statusIdx++];
 
                     if($status[$statusIdx] < 1) {
-                        print "</p><p style=\"margin-bottom:0\">";
                         print "<strong>No slave TWCs found on RS485 network.</strong>";
                     }
                     else {
@@ -706,7 +693,6 @@ Thanks for using TWCManager, we hope you are finding this project useful.
         }
         return true;
     }
-
 
     function DisplaySelect($name, $selectExtraParams, $valueArray, $defaultKey = "")
     // Display an HTML form <select><option>...</option></select> block using
